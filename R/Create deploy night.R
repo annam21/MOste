@@ -1,6 +1,6 @@
 # Make deploys with only night photos 
 # Anna Moeller 
-# 4/30/2021
+# 4/30/2021  
 
 # Rule of thumb for night, based on 2017 days
 # 8:30 am to 4:15 pm
