@@ -13,31 +13,22 @@ library(spaceNtime)
 library(lubridate)
 
 # Load data 
-elkfiles <- list.files("data/clean", 
-                       pattern = "CleanDatabaseF1[[:digit:]]\\.RDS",
-                       full.names = TRUE)
-deerfiles <- list.files("data/clean", 
-                        pattern = "CleanDatabaseDeerF1[[:digit:]]\\.RDS",
-                        full.names = TRUE)
+df <- readRDS("data/clean/CleanElkandDeer.rds")
 
-# Rejoin them for ease
-elk <- map_dfr(elkfiles, readRDS) %>% 
-  # Make column names correct
-  rename(cam = CamID, count = ElkCount)
+# elk
+elk <- df %>% 
+  select(-DeerCount) %>% 
+  rename(count = ElkCount)
+
 # Deer
-deer <- map_dfr(deerfiles, readRDS) %>% 
-  # Make column names correct
-  rename(cam = CamID, count = DeerCount) %>% 
-  # We found problems in 2018
-  filter(
-    !(cam %in% c("9_3", "9_4", "9_6", "9_16", "9_30") & 
-      lubridate::year(datetime) == 2018)
-  )
+deer <- df %>%
+  select(-ElkCount) %>% 
+  rename(count = DeerCount)
 
 # Deploy - including night photos
 ## Deploy database
 depfiles <- list.files("data/deploy",
-                       pattern = "Fall",
+                       pattern = "Cams",
                        full.names = TRUE)
 
 ## Join deploy together
@@ -61,7 +52,8 @@ deploy <- map_dfr(depfiles, read_csv) %>%
       Cover == "Woods" ~ 8
     )
   ) %>%
-  select(cam, start, end, area, Cover)
+  select(cam, start, end, area, Cover) %>% 
+  distinct()
 
 ############################################################
 # # ALTERNATIVELY
@@ -84,7 +76,6 @@ deploy <- map_dfr(depfiles, read_csv) %>%
 #   filter(Time >= hms::hms(hours = 8, min = 30),
 #          Time <= hms::hms(hours = 16, min = 15))
 ###########################################################
-
 # Our function to run the estimates together
 pres_est <- function(study_dates, elk, deer, deploy){
   # Build occasions
@@ -103,7 +94,8 @@ pres_est <- function(study_dates, elk, deer, deploy){
   } else {
     est_elk <- ste_estN_fn(ste_eh_elk, study_area = 1e6) %>% 
       mutate(species = "elk",
-             season = paste0("fall", lubridate::year(study_dates[[1]]))) %>% 
+             # season = paste0("fall", lubridate::year(study_dates[[1]])) # hard code
+             ) %>% 
       rename(Dkm2 = N,
              SE_km2 = SE)
   }
@@ -112,7 +104,8 @@ pres_est <- function(study_dates, elk, deer, deploy){
   } else {
     est_deer <- ste_estN_fn(ste_eh_deer, study_area = 1e6) %>%
       mutate(species = "deer",
-             season = paste0("fall", lubridate::year(study_dates[[1]]))) %>% 
+             # season = paste0("fall", lubridate::year(study_dates[[1]]))
+             ) %>% 
       rename(Dkm2 = N,
              SE_km2 = SE)
   }
@@ -126,20 +119,29 @@ pres_est <- function(study_dates, elk, deer, deploy){
 
 # Specify study dates and sampling occasions
 study_dates <- list(
-  as.POSIXct(c("2017-9-01 00:00:00",
-               "2017-11-30 23:59:59"), 
+  # fall
+  fall17 = as.POSIXct(c("2017-9-01 00:00:00",
+               "2017-11-30 23:59:59"),
              tz = "GMT"),
-  as.POSIXct(c("2018-9-01 00:00:00",
-               "2018-11-30 23:59:59"), 
+  fall18 = as.POSIXct(c("2018-9-01 00:00:00",
+               "2018-11-30 23:59:59"),
              tz = "GMT"),
-  as.POSIXct(c("2019-9-01 00:00:00",
-               "2019-11-30 23:59:59"), 
+  fall19 = as.POSIXct(c("2019-9-01 00:00:00",
+               "2019-11-30 23:59:59"),
+             tz = "GMT"),
+  # winter
+  winter1718 = as.POSIXct(c("2017-12-01 00:00:00",
+               "2018-02-28 23:59:59"),
+             tz = "GMT"),
+  winter1819 = as.POSIXct(c("2018-12-01 00:00:00",
+               "2019-02-28 23:59:59"),
              tz = "GMT")
 )
 
 # Run estimates
 # pres_est(study_dates, elk, deer, deploy)
-our_est <- map_dfr(study_dates, pres_est, elk, deer, deploy)
+our_est <- map_dfr(study_dates, pres_est, elk, deer, deploy) %>% 
+  mutate(season = rep(names(study_dates), each = 2))
 toplot <- our_est %>%
     mutate(N_PR = Dkm2 / 1e6 * 96161402,
            SE_PR = SE_km2 / 1e6 * 96161402,
@@ -147,9 +149,11 @@ toplot <- our_est %>%
            SE_ERZ = SE_km2 / 1e6 * 896000000,
            D_mi2 = Dkm2 / 0.386,
            SE_mi2 = Dkm2 / 0.386,
-           year = as.factor(substr(season, 5, 8)),
-           season = substr(season, 1, 4)
-           ) 
+           season = factor(season, 
+                           levels = c('fall17', 'winter1718', 'fall18', 'winter1819', 'fall19'))
+  )
+
+           
 # save
 # saveRDS(toplot, "modelrun_dayonly.rds")
 # saveRDS(toplot, "modelrun_dayandnight.rds")
@@ -161,11 +165,11 @@ toplot %>%
 
 # Plot
 ggplot(toplot) + 
-  geom_point(aes(x = year, 
+  geom_point(aes(x = season, 
                  y = D_mi2, 
                  color = species),
              position = position_dodge(0.2)) + 
-  geom_errorbar(aes(x = year, 
+  geom_errorbar(aes(x = season, 
                     ymin = D_mi2 - 1.96*SE_mi2, 
                     ymax = D_mi2 + 1.96*SE_mi2,
                     color = species),
@@ -173,7 +177,3 @@ ggplot(toplot) +
                 width = 0) + 
   theme_classic()
   
-# Debugging
-## Find problem cameras 
-# unique(elk$cam)[!(unique(elk$cam) %in% deploys$cam)]
-

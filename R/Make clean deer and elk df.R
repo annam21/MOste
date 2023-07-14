@@ -21,7 +21,12 @@ cam <- camraw %>%
   mutate(ElkCount = ElkMatBull + ElkSpike + ElkCow + ElkCalf + ElkUnkn,
          DeerCount = WTDbuck + WTDdoe + WTDfawn + WTDunkn) %>% 
   rename(cam = CamID) %>% 
-  select(cam, File, Folder, datetime, ElkCount, DeerCount)
+  select(cam, File, Folder, datetime, ElkCount, DeerCount)  %>% 
+  # We found problems in 2018 with the deploy. Taking them all out
+  filter(
+    !(cam %in% c("9_3", "9_4", "9_6", "9_16", "9_30") & 
+        lubridate::year(datetime) == 2018)
+  )
 
 saveRDS(cam, "data/clean/CleanElkandDeer.rds")
 
