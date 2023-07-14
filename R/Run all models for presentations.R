@@ -3,9 +3,9 @@
 # 2/18/2021
 
 # Download package
-# devtools::install_github("annam21/spaceNtime", 
-#                          build_opts = c("--no-resave-data", "--no-manual"), 
-#                          build_vignettes = T, 
+# devtools::install_github("annam21/spaceNtime",
+#                          build_opts = c("--no-resave-data", "--no-manual"),
+#                          build_vignettes = F,
 #                          force = T)
 
 library(tidyverse)
@@ -34,55 +34,55 @@ deer <- map_dfr(deerfiles, readRDS) %>%
       lubridate::year(datetime) == 2018)
   )
 
-# # Deploy - including night photos 
-# ## Deploy database
-# depfiles <- list.files("data/deploy", 
-#                        pattern = "Fall",
-#                        full.names = TRUE)
-# 
-# ## Join deploy together 
-# deploy <- map_dfr(depfiles, read_csv) %>%
-#   # Make start and end times in POSIX
-#   mutate(start = as.POSIXct(Deployment, format = "%m/%d/%Y", tz = "GMT"),
-#          end = as.POSIXct(Recovery, format = "%m/%d/%Y", tz = "GMT")) %>%
-#   # Make column names correct
-#   rename(cam = CamID) %>%
-#   # Add area sampled per camera
-#   # 106 for Reconyx
-#   # 102 for 60 ft AVERAGE sensing distance as listed in correct Bushnell model manual
-#   # 73 for 45-ft detection--This is actually listed as average detection range in manual
-#   # 8 for 15-ft detection and assuming 45 deg detection angle
-#   # 228 for 80-ft detection
-#   # Change detection area for different types of cameras, which creates new column for area
-#   mutate(
-#     area = case_when(
-#       Cover == "Plot" ~ 73,
-#       Cover == "Glade" ~ 32,
-#       Cover == "Woods" ~ 8
-#     )
-#   ) %>%
-#   select(cam, start, end, area, Cover)
+# Deploy - including night photos
+## Deploy database
+depfiles <- list.files("data/deploy",
+                       pattern = "Fall",
+                       full.names = TRUE)
 
-############################################################
-# ALTERNATIVELY
-# Deploy only day photos: 0830 to 1615
-deploy <- readRDS("data/deploy/deploy_fall_0830_1615.rds") %>%
+## Join deploy together
+deploy <- map_dfr(depfiles, read_csv) %>%
+  # Make start and end times in POSIX
+  mutate(start = as.POSIXct(Deployment, format = "%m/%d/%Y", tz = "GMT"),
+         end = as.POSIXct(Recovery, format = "%m/%d/%Y", tz = "GMT")) %>%
+  # Make column names correct
+  rename(cam = CamID) %>%
+  # Add area sampled per camera
+  # 106 for Reconyx
+  # 102 for 60 ft AVERAGE sensing distance as listed in correct Bushnell model manual
+  # 73 for 45-ft detection--This is actually listed as average detection range in manual
+  # 8 for 15-ft detection and assuming 45 deg detection angle
+  # 228 for 80-ft detection
+  # Change detection area for different types of cameras, which creates new column for area
   mutate(
     area = case_when(
       Cover == "Plot" ~ 73,
       Cover == "Glade" ~ 32,
       Cover == "Woods" ~ 8
     )
-  )
-# Will need to filter deer and elk to only day photos too
-deer <- deer %>% 
-  mutate(Time = hms::as_hms(Time)) %>% 
-  filter(Time >= hms::hms(hours = 8, min = 30),
-         Time <= hms::hms(hours = 16, min = 15)) 
-elk <- elk %>% 
-  mutate(Time = hms::as_hms(Time)) %>% 
-  filter(Time >= hms::hms(hours = 8, min = 30),
-         Time <= hms::hms(hours = 16, min = 15)) 
+  ) %>%
+  select(cam, start, end, area, Cover)
+
+############################################################
+# # ALTERNATIVELY
+# # Deploy only day photos: 0830 to 1615
+# deploy <- readRDS("data/deploy/deploy_fall_0830_1615.rds") %>%
+#   mutate(
+#     area = case_when(
+#       Cover == "Plot" ~ 73,
+#       Cover == "Glade" ~ 32,
+#       Cover == "Woods" ~ 8
+#     )
+#   )
+# # Will need to filter deer and elk to only day photos too b/c deploy doesn't want photos when cam not working
+# deer <- deer %>%
+#   mutate(Time = hms::as_hms(Time)) %>%
+#   filter(Time >= hms::hms(hours = 8, min = 30),
+#          Time <= hms::hms(hours = 16, min = 15))
+# elk <- elk %>%
+#   mutate(Time = hms::as_hms(Time)) %>%
+#   filter(Time >= hms::hms(hours = 8, min = 30),
+#          Time <= hms::hms(hours = 16, min = 15))
 ###########################################################
 
 # Our function to run the estimates together
@@ -150,6 +150,9 @@ toplot <- our_est %>%
            year = as.factor(substr(season, 5, 8)),
            season = substr(season, 1, 4)
            ) 
+# save
+# saveRDS(toplot, "modelrun_dayonly.rds")
+# saveRDS(toplot, "modelrun_dayandnight.rds")
 
 # Look at the numbers 
 toplot %>% 
