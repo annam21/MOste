@@ -69,10 +69,10 @@ onoff <- map_dfr(onofffiles, read_csv) %>%
 # Seasonally
 onoffseason <- onoff %>%
   mutate(season = case_when(
-    month %in% c(9, 10, 11) ~ "fall",
-    month %in% c(12, 1, 2) ~ "winter"
+    month %in% c(9, 10, 11) ~ "Fall",
+    month %in% c(12, 1, 2) ~ "Winter"
   )) %>% 
-  filter(season %in% c("fall", "winter")) %>%
+  filter(season %in% c("Fall", "Winter")) %>%
   group_by(year, season) %>%
   summarize(prop_pts_On = mean(InorOut)) 
 onoffseason %>%
@@ -81,66 +81,108 @@ onoffseason %>%
 ```
 
 # STE
-```{r, echo= F}
-# # Peck abundance estimates 
-# mdcN <- data.frame(
-#   year = c(2017, 2018, 2019),
-#   N = c(_, _, _)
-# ) <- left_join(onoffseason, .) %>% 
-#   mutate(adjN = N * prop_pts_On)
+```{r, echo= F, message = F}
+# Peck abundance estimates
+mdcN <- data.frame(
+  year = c(2017, 2018, 2019),
+  mdcN = c(134, 170, 173)
+) %>% left_join(onoffseason, .) %>%
+  mutate(mdc_adjN = mdcN * prop_pts_On)
 
 # STE deer and elk 
-steest <- readRDS("model output/modelrun_dayandnight.rds")
+steest <- readRDS("model output/modelrun_dayandnight.rds")  %>% 
+  mutate(
+    yr = as.numeric(case_when(
+      season == "fall17" ~ "2017",
+      season == "fall18" ~ "2018",
+      season == "fall19" ~ "2019",
+      season == "winter1718" ~ "2017",
+      season == "winter1819" ~ "2018"
+    )),
+    seasonyr = case_when(
+      season == "fall17" ~ "Fall 2017",
+      season == "fall18" ~ "Fall 2018",
+      season == "fall19" ~ "Fall 2019",
+      season == "winter1718" ~ "Winter 2017-18",
+      season == "winter1819" ~ "Winter 2018-19"
+    ),
+    seasonyr = factor(seasonyr, 
+                           levels = c("Fall 2017", 'Winter 2017-18', 'Fall 2018', 'Winter 2018-19', 'Fall 2019'))
+  ) %>% 
+  select(-season) %>% 
+  mutate(season = if_else(grepl("Fall", seasonyr), "Fall", "Winter"))
 
-# Plot
-deerD <- ggplot(steest %>% filter(species == "deer")) + 
-  geom_point(aes(x = season, 
-                 y = Dkm2),
-             position = position_dodge(0.2)) + 
-  geom_errorbar(aes(x = season, 
-                    ymin = Dkm2 - 1.96*SE_km2, 
-                    ymax = Dkm2 + 1.96*SE_km2),
-                position = position_dodge(0.2),
-                width = 0) + 
-  theme_classic() + 
-  ylab(bquote('Density '(km^-2))) 
-elkD <- ggplot(steest %>% filter(species == "elk")) + 
-  geom_point(aes(x = season, 
-                 y = Dkm2),
-             position = position_dodge(0.2)) + 
-  geom_errorbar(aes(x = season, 
-                    ymin = Dkm2 - 1.96*SE_km2, 
-                    ymax = Dkm2 + 1.96*SE_km2),
-                position = position_dodge(0.2),
-                width = 0) + 
-  theme_classic() + 
-  ylab(bquote('Density '(km^-2))) 
-
-# Abundance
-deerN <- ggplot(steest %>% filter(species =="deer")) + 
-  geom_point(aes(x = season, 
-                 y = N_PR),
-             position = position_dodge(0.2)) + 
-  geom_errorbar(aes(x = season, 
+# Plot deer
+deerplot <- ggplot(steest %>% filter(species == "deer")) + 
+  ggtitle("Deer") + 
+  geom_point(aes(x = seasonyr, 
+                 y = N_PR,
+                 color = season)) + 
+  geom_errorbar(aes(x = seasonyr, 
                     ymin = N_PR - 1.96*SE_PR, 
-                    ymax = N_PR + 1.96*SE_PR),
-                position = position_dodge(0.2),
+                    ymax = N_PR + 1.96*SE_PR,
+                    color = season),
                 width = 0) + 
-  theme_classic() +  
-  ylab('Abundance in Peck Ranch')
-elkN <- ggplot(steest %>% filter(species =="elk")) + 
-  geom_point(aes(x = season, 
-                 y = N_PR),
-             position = position_dodge(0.2)) + 
-  geom_errorbar(aes(x = season, 
-                    ymin = N_PR - 1.96*SE_PR, 
-                    ymax = N_PR + 1.96*SE_PR),
-                position = position_dodge(0.2),
-                width = 0) + 
-  theme_classic() +  
-  ylab('Abundance in Peck Ranch')
+  # Customize the Y axes:
+  scale_y_continuous(
+    # Features of the first axis
+    name = "Abundance on Peck Ranch",
+    # Add a second axis and specify its features
+    sec.axis = sec_axis( trans=~./96.1614, name=bquote('Density '(km^-2)))
+  ) + 
+  xlab(element_blank()) + 
+  theme_bw() +
+  theme(legend.position = "none") 
 
-ggpubr::ggarrange(deerD, deerN, elkD, elkN) # species in rows
+# Plot elk
+elkdat <- steest %>% 
+  filter(species == "elk") %>% 
+  left_join(., mdcN, by = c("season" = "season", "yr" = "year"))
+
+p <- ggplot(elkdat) + 
+  ggtitle("Elk") + 
+  geom_point(aes(x = seasonyr, 
+                 y = N_PR,
+                 color = season), show.legend = F) + 
+  geom_errorbar(aes(x = seasonyr, 
+                    ymin = N_PR - 1.96*SE_PR, 
+                    ymax = N_PR + 1.96*SE_PR,
+                    color = season),
+                width = 0, show.legend = F) + 
+  # Customize the Y axes:
+  scale_y_continuous(
+    # Features of the first axis
+    name = "Abundance on Peck Ranch",
+    # Add a second axis and specify its features
+    sec.axis = sec_axis( trans=~./96.1614, name=bquote('Density '(km^-2)))
+  ) + 
+  xlab(element_blank()) + 
+  theme_bw() 
+
+shps <- c("MDC estimate" = 9, "Adjusted MDC estimate"=8)
+elkplot <- p + 
+  # To get it with the legend
+  geom_point(aes(x= seasonyr, y = mdcN, shape = "MDC estimate")) +
+  geom_point(aes(x= seasonyr, y = mdc_adjN, shape = "Adjusted MDC estimate")) +
+  scale_shape_manual(values = shps, name = element_blank())
+
+
+# ggpubr::ggarrange(deerplot, elkplot, nrow = 2) 
+
+library(grid)
+library(ggpubr)
+figure <- ggpubr::ggarrange(deerplot + rremove("ylab"), 
+                            elkplot + rremove("ylab"), 
+                            nrow = 2, 
+                            legend = "bottom") 
+ggpubr::annotate_figure(figure, 
+                left = textGrob("Abundance on Peck Ranch", 
+                                rot = 90, 
+                                vjust = 1, 
+                                gp = gpar(cex = 1.3)),
+                right = textGrob(bquote('Density '(km^-2)), 
+                                 rot = 270,
+                                  gp = gpar(cex = 1.3)))
   
 ```
 
