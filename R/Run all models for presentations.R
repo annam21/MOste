@@ -54,6 +54,7 @@ deploy <- map_dfr(depfiles, read_csv) %>%
   ) %>%
   select(cam, start, end, area, Cover) %>% 
   distinct()
+saveRDS(deploy, "deploy_fall and winter clean.rds")
 
 ############################################################
 # # ALTERNATIVELY
@@ -155,8 +156,8 @@ toplot <- our_est %>%
 
            
 # save
-# saveRDS(toplot, "modelrun_dayonly.rds")
-# saveRDS(toplot, "modelrun_dayandnight.rds")
+# saveRDS(toplot, "model output/modelrun_dayonly.rds")
+# saveRDS(toplot, "model output/modelrun_dayandnight.rds")
 
 # Look at the numbers 
 toplot %>% 

@@ -1,0 +1,146 @@
+---
+title: "For manuscript"
+author: "Anna Moeller"
+date: "2023-07-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+# Photo summaries
+
+```{r, echo = F}
+df <- readRDS("data/clean/CleanElkandDeer.rds") %>%
+  mutate(season = case_when(
+    datetime >= as.POSIXct("2017-9-01 00:00:00", tz = "GMT") & 
+      datetime <= as.POSIXct("2017-11-30 23:59:59", tz = "GMT") ~ "fall 2017",
+    datetime >= as.POSIXct("2018-9-01 00:00:00", tz = "GMT") & 
+      datetime <= as.POSIXct("2018-11-30 23:59:59", tz = "GMT") ~ "fall 2018",
+    datetime >= as.POSIXct("2019-9-01 00:00:00", tz = "GMT") & 
+      datetime <= as.POSIXct("2019-11-30 23:59:59", tz = "GMT") ~ "fall 2019",
+    datetime >= as.POSIXct("2017-12-01 00:00:00", tz = "GMT") & 
+      datetime <= as.POSIXct("2018-02-28 23:59:59", tz = "GMT") ~ "winter 2017-18",
+    datetime >= as.POSIXct("2018-12-01 00:00:00", tz = "GMT") & 
+      datetime <= as.POSIXct("2019-02-28 23:59:59", tz = "GMT") ~ "winter 2018-19",
+  ))
+```
+We removed 5 deployments from 2018 that had issues between the photo data and the deploy database. After removing them, we took `r nrow(df)` total motion-sensor photos over the 3 years. 
+
+```{r, echo = F}
+deploy <- readRDS("data/deploy/deploy_fall and winter clean.rds") 
+trapdays <- deploy %>% 
+  mutate(days = end - start) %>% 
+  summarize(trapdays = sum(days))
+```
+Based on the deploy data, the cameras were functional for `r trapdays` trap days. 
+
+Of our `r nrow(df)` total photos, we took `r length(which(df$ElkCount>0))` photos with elk in them and `r length(which(df$DeerCount>0))` photos of deer. 
+
+### Seasons
+
+We defined fall from September 1 through November 30. We defined winter from December 1 through February 28. Our deer and elk detections were distributed by season as shown in this table: 
+```{r, echo = F}
+df %>% 
+  group_by(season) %>% 
+  summarize(DeerPhotos = sum(DeerCount > 0),
+            ElkPhotos = sum(ElkCount > 0)) %>% 
+  knitr::kable() # fine but kind of ugly
+  # tibble::print.tbl_df() # doesn't work
+  # rmarkdown::paged_table() # another option, pretty similar
+
+```
+
+# Proportion of points on Peck
+```{r, message = F, echo = F}
+onofffiles <- list.files("data/on off peck", full.names = TRUE)
+onoff <- map_dfr(onofffiles, read_csv) %>% 
+  mutate(date = mdy(GPS_DATE_G),
+         year = year(date),
+         month = month(date))
+# # Monthly 
+# onoff %>% 
+#   group_by(year, month) %>% 
+#   summarize(prop_pts = mean(InorOut)) %>% 
+#   knitr::kable()
+
+# Seasonally
+onoffseason <- onoff %>%
+  mutate(season = case_when(
+    month %in% c(9, 10, 11) ~ "fall",
+    month %in% c(12, 1, 2) ~ "winter"
+  )) %>% 
+  filter(season %in% c("fall", "winter")) %>%
+  group_by(year, season) %>%
+  summarize(prop_pts_On = mean(InorOut)) 
+onoffseason %>%
+  knitr::kable()
+  
+```
+
+# STE
+```{r, echo= F}
+# # Peck abundance estimates 
+# mdcN <- data.frame(
+#   year = c(2017, 2018, 2019),
+#   N = c(_, _, _)
+# ) <- left_join(onoffseason, .) %>% 
+#   mutate(adjN = N * prop_pts_On)
+
+# STE deer and elk 
+steest <- readRDS("model output/modelrun_dayandnight.rds")
+
+# Plot
+deerD <- ggplot(steest %>% filter(species == "deer")) + 
+  geom_point(aes(x = season, 
+                 y = Dkm2),
+             position = position_dodge(0.2)) + 
+  geom_errorbar(aes(x = season, 
+                    ymin = Dkm2 - 1.96*SE_km2, 
+                    ymax = Dkm2 + 1.96*SE_km2),
+                position = position_dodge(0.2),
+                width = 0) + 
+  theme_classic() + 
+  ylab(bquote('Density '(km^-2))) 
+elkD <- ggplot(steest %>% filter(species == "elk")) + 
+  geom_point(aes(x = season, 
+                 y = Dkm2),
+             position = position_dodge(0.2)) + 
+  geom_errorbar(aes(x = season, 
+                    ymin = Dkm2 - 1.96*SE_km2, 
+                    ymax = Dkm2 + 1.96*SE_km2),
+                position = position_dodge(0.2),
+                width = 0) + 
+  theme_classic() + 
+  ylab(bquote('Density '(km^-2))) 
+
+# Abundance
+deerN <- ggplot(steest %>% filter(species =="deer")) + 
+  geom_point(aes(x = season, 
+                 y = N_PR),
+             position = position_dodge(0.2)) + 
+  geom_errorbar(aes(x = season, 
+                    ymin = N_PR - 1.96*SE_PR, 
+                    ymax = N_PR + 1.96*SE_PR),
+                position = position_dodge(0.2),
+                width = 0) + 
+  theme_classic() +  
+  ylab('Abundance in Peck Ranch')
+elkN <- ggplot(steest %>% filter(species =="elk")) + 
+  geom_point(aes(x = season, 
+                 y = N_PR),
+             position = position_dodge(0.2)) + 
+  geom_errorbar(aes(x = season, 
+                    ymin = N_PR - 1.96*SE_PR, 
+                    ymax = N_PR + 1.96*SE_PR),
+                position = position_dodge(0.2),
+                width = 0) + 
+  theme_classic() +  
+  ylab('Abundance in Peck Ranch')
+
+ggpubr::ggarrange(deerD, deerN, elkD, elkN) # species in rows
+  
+```
+
