@@ -6,13 +6,14 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
 library(tidyverse)
 ```
 
 # Photo summaries
 
-```{r, echo = F}
+```{r}
 df <- readRDS("data/clean/CleanElkandDeer.rds") %>%
   mutate(season = case_when(
     datetime >= as.POSIXct("2017-9-01 00:00:00", tz = "GMT") & 
@@ -29,7 +30,7 @@ df <- readRDS("data/clean/CleanElkandDeer.rds") %>%
 ```
 We removed 5 deployments from 2018 that had issues between the photo data and the deploy database. After removing them, we took `r nrow(df)` total motion-sensor photos over the 3 years. 
 
-```{r, echo = F}
+```{r}
 deploy <- readRDS("data/deploy/deploy_fall and winter clean.rds") 
 trapdays <- deploy %>% 
   mutate(days = end - start) %>% 
@@ -42,7 +43,7 @@ Of our `r nrow(df)` total photos, we took `r length(which(df$ElkCount>0))` photo
 ### Seasons
 
 We defined fall from September 1 through November 30. We defined winter from December 1 through February 28. Our deer and elk detections were distributed by season as shown in this table: 
-```{r, echo = F}
+```{r}
 df %>% 
   group_by(season) %>% 
   summarize(DeerPhotos = sum(DeerCount > 0),
@@ -53,8 +54,8 @@ df %>%
 
 ```
 
-# Proportion of points on Peck
-```{r, message = F, echo = F}
+# Proportion of elk points on Peck
+```{r, message = F}
 onofffiles <- list.files("data/on off peck", full.names = TRUE)
 onoff <- map_dfr(onofffiles, read_csv) %>% 
   mutate(date = mdy(GPS_DATE_G),
@@ -81,7 +82,7 @@ onoffseason %>%
 ```
 
 # STE
-```{r, echo= F, message = F}
+```{r}
 # STE deer and elk 
 steest <- readRDS("model output/modelrun_dayandnight.rds")  %>% 
   mutate(
@@ -119,7 +120,10 @@ mdcN <- onoffseason %>%
     mdc_adjN = mdcN * prop_pts_On,
     species = "Elk"
   ) 
+```
 
+### Deer estimates 
+```{r}
 # Table of estimates 
 tmp <- steest %>% 
   arrange(species, seasonyr) %>% 
@@ -128,13 +132,20 @@ tmp <- steest %>%
 tmp %>% 
   filter(species == "Deer") %>% 
   knitr::kable()
+```
+
+### Elk estimates 
+```{r}
 # elk 
 tmp %>% 
   filter(species == "Elk") %>% 
   left_join(., mdcN, by = c( "seasonyr", "species")) %>% 
   select(-year, -season) %>% 
   knitr::kable()
+```
 
+# Plots of estimates 
+```{r}
 # Plot deer and elk
 p <- ggplot(steest, aes(x = seasonyr, 
                    y = N_PR)) + 
